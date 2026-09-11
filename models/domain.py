@@ -13,15 +13,27 @@ class SetupClassification(str, Enum):
     BREAKOUT = "Breakout"
     PULLBACK_CONTINUATION = "Pullback Continuation"
     EXHAUSTION = "Exhaustion / High Risk"
+    NONE = "None"
+
+
+class ScoreTier(str, Enum):
+    """Score classification tiers according to Section 29."""
+    STRONG = "STRONG"          # 85–100
+    WATCH = "WATCH"            # 70–84
+    CONDITIONAL = "CONDITIONAL"# 55–69
+    WEAK = "WEAK"              # 40–54
+    REJECT = "REJECT"          # 0–39
 
 
 class ConfirmationState(str, Enum):
     """Confirmation state according to Section 33."""
-    WATCH = "Watch"
-    CONFIRMATION = "Confirmation Candidate"
-    CONFIRMED = "Confirmed"
-    WEAKENING = "Weakening"
-    INVALIDATED = "Invalidated"
+    CONFIRMED = "CONFIRMED"
+    DEVELOPING = "DEVELOPING"
+    WEAKENING = "WEAKENING"
+    INVALIDATED = "INVALIDATED"
+    # Aliases for backward compatibility
+    WATCH = "DEVELOPING"
+    CONFIRMATION = "DEVELOPING"
 
 
 class TokenSnapshot(BaseModel):
@@ -188,6 +200,21 @@ class ScoreBreakdown(BaseModel):
         description="Dimensions that could not be evaluated due to missing provider data",
     )
 
+    def to_dict(self) -> Dict[str, float]:
+        """Dictionary of component scores matching strategy names."""
+        return {
+            "market_cap": self.market_cap_score,
+            "liquidity": self.liquidity_score,
+            "volume": self.volume_score,
+            "price_momentum": self.price_momentum_score,
+            "buy_sell_pressure": self.buy_sell_pressure_score,
+            "buyer_seller_breadth": self.buyer_seller_breadth_score,
+            "holder_growth": self.holders_score,
+            "top_10_concentration": self.top10_score,
+            "trader_activity": self.trader_activity_score,
+            "narrative": self.narrative_score,
+        }
+
     @computed_field
     @property
     def total_score(self) -> float:
@@ -217,6 +244,49 @@ class MomentumScoreResult(BaseModel):
     missing_metrics: List[str] = Field(default_factory=list)
 
 
+class MomentumAnalysis(BaseModel):
+    """Deterministic momentum analysis output for research, alerting, and strategy evaluation."""
+    model_config = ConfigDict(extra="ignore")
+
+    token_address: str
+    symbol: Optional[str] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    score: float = Field(..., ge=0.0, le=100.0, description="Total momentum score (0-100)")
+    score_breakdown: Dict[str, float] = Field(
+        ..., description="Scores for each of the 10 strategy dimensions"
+    )
+    score_tier: ScoreTier = Field(
+        ..., description="STRONG, WATCH, CONDITIONAL, WEAK, or REJECT"
+    )
+    classification: SetupClassification = Field(
+        ..., description="Setup classification profile"
+    )
+    setup_state: ConfirmationState = Field(
+        ..., description="CONFIRMED, DEVELOPING, WEAKENING, or INVALIDATED"
+    )
+
+    reasons: List[str] = Field(
+        default_factory=list, description="2-4 factual objective reasons supporting setup"
+    )
+    warnings: List[str] = Field(
+        default_factory=list, description="Objective risks, distribution hazards, or divergences"
+    )
+    confirmation_needed: List[str] = Field(
+        default_factory=list, description="Conditions required before trade consideration"
+    )
+    invalidation_conditions: List[str] = Field(
+        default_factory=list, description="Events that falsify the momentum thesis"
+    )
+    next_action: str = Field(
+        default="Ignore", description="Recommended next action (e.g. Watch, Confirm, Ignore)"
+    )
+    is_overextended: bool = Field(
+        default=False, description="Flag indicating vertical price move poses bad entry"
+    )
+    raw_breakdown: Optional[ScoreBreakdown] = None
+
+
 class AlertCandidate(BaseModel):
     """Qualified token candidate ready for dispatch, confirmation, and recording."""
     token: TokenSnapshot
@@ -229,3 +299,4 @@ class AlertCandidate(BaseModel):
     confirmation_needed: str
     invalidation_criteria: str
     next_action: str
+    analysis: Optional[MomentumAnalysis] = None
