@@ -7,8 +7,17 @@ from models.domain import (
     SetupClassification,
     MomentumScoreResult,
     AlertCandidate,
+    TokenSnapshot,
 )
-from models.db import TokenAlert, PriceObservation, SetupOutcome
+from models.db import (
+    DataSource,
+    Token,
+    Pool,
+    MarketSnapshot,
+    TokenAlert,
+    PriceObservation,
+    SetupOutcome,
+)
 
 __all__ = [
     "ConfirmationState",
@@ -17,6 +26,11 @@ __all__ = [
     "SetupClassification",
     "MomentumScoreResult",
     "AlertCandidate",
+    "TokenSnapshot",
+    "DataSource",
+    "Token",
+    "Pool",
+    "MarketSnapshot",
     "TokenAlert",
     "PriceObservation",
     "SetupOutcome",

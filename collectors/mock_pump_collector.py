@@ -9,7 +9,12 @@ from models.domain import TokenSnapshot
 class MockPumpCollector(MarketDataProvider):
     """Reference mock provider satisfying MarketDataProvider returning TokenSnapshot objects."""
 
-    def __init__(self, initial_tokens: Optional[List[TokenSnapshot]] = None):
+    def __init__(
+        self,
+        initial_tokens: Optional[List[TokenSnapshot]] = None,
+        provider_name: Optional[str] = None,
+    ):
+        self._provider_name = provider_name or "mock_pump_provider"
         self._tokens: Dict[str, TokenSnapshot] = {}
         if initial_tokens:
             for t in initial_tokens:
@@ -19,7 +24,7 @@ class MockPumpCollector(MarketDataProvider):
 
     @property
     def provider_name(self) -> str:
-        return "mock_pump_provider"
+        return self._provider_name
 
     def _load_default_scenarios(self) -> None:
         """Load standard test tokens representing key scenarios from STRATEGY.md."""
@@ -124,6 +129,10 @@ class MockPumpCollector(MarketDataProvider):
     def set_token(self, token: TokenSnapshot) -> None:
         """Insert or update a token in the mock feed."""
         self._tokens[token.token_address] = token
+
+    def add_token(self, token: TokenSnapshot) -> None:
+        """Alias for set_token."""
+        self.set_token(token)
 
     async def fetch_active_tokens(self, limit: int = 50) -> List[TokenSnapshot]:
         """Return simulated active tokens."""

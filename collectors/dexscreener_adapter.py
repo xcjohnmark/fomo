@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from collectors.base import MarketDataProvider
+from collectors.resilience import AsyncRateLimiter, execute_with_retry
 from models.domain import TokenSnapshot
 
 logger = logging.getLogger(__name__)
@@ -22,9 +23,15 @@ class DexScreenerAdapter(MarketDataProvider):
 
     BASE_URL = "https://api.dexscreener.com/latest/dex"
 
-    def __init__(self, http_client: Optional[httpx.AsyncClient] = None, timeout_seconds: float = 10.0):
+    def __init__(
+        self,
+        http_client: Optional[httpx.AsyncClient] = None,
+        timeout_seconds: float = 10.0,
+        rate_limiter: Optional[AsyncRateLimiter] = None,
+    ):
         self._client = http_client
         self._timeout = timeout_seconds
+        self._rate_limiter = rate_limiter or AsyncRateLimiter(max_rate_per_minute=300)
 
     @property
     def provider_name(self) -> str:
@@ -34,6 +41,19 @@ class DexScreenerAdapter(MarketDataProvider):
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(timeout=self._timeout)
         return self._client
+
+    async def _fetch_url(self, url: str) -> httpx.Response:
+        """Fetch URL with rate limiting and exponential retry on 429/5xx."""
+        async with self._rate_limiter:
+            client = await self._get_client()
+
+            async def _do_req() -> httpx.Response:
+                resp = await client.get(url)
+                if resp.status_code in {429, 500, 502, 503, 504}:
+                    resp.raise_for_status()
+                return resp
+
+            return await execute_with_retry(_do_req)
 
     def normalize_pair(self, pair: Dict[str, Any]) -> Optional[TokenSnapshot]:
         """Convert a raw DexScreener pair dictionary into a standardized TokenSnapshot."""
@@ -136,10 +156,9 @@ class DexScreenerAdapter(MarketDataProvider):
 
     async def fetch_token_snapshot(self, token_address: str) -> Optional[TokenSnapshot]:
         """Fetch real-time snapshot for a token CA from DexScreener."""
-        client = await self._get_client()
         url = f"{self.BASE_URL}/tokens/{token_address}"
         try:
-            resp = await client.get(url)
+            resp = await self._fetch_url(url)
             if resp.status_code != 200:
                 logger.warning("DexScreener token query returned %s for %s", resp.status_code, token_address)
                 return None
@@ -161,10 +180,9 @@ class DexScreenerAdapter(MarketDataProvider):
 
     async def fetch_active_tokens(self, limit: int = 50) -> List[TokenSnapshot]:
         """Fetch trending / active tokens via DexScreener search."""
-        client = await self._get_client()
         url = f"{self.BASE_URL}/search?q=solana"
         try:
-            resp = await client.get(url)
+            resp = await self._fetch_url(url)
             if resp.status_code != 200:
                 logger.warning("DexScreener search query returned %s", resp.status_code)
                 return []
@@ -193,11 +211,10 @@ class DexScreenerAdapter(MarketDataProvider):
 
     async def health_check(self) -> bool:
         """Verify DexScreener connectivity."""
-        client = await self._get_client()
         try:
             # Query a known stable Solana token (USDC)
             url = f"{self.BASE_URL}/tokens/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-            resp = await client.get(url)
+            resp = await self._fetch_url(url)
             return resp.status_code == 200
         except Exception as e:
             logger.warning("DexScreener health check failed: %s", e)

@@ -6,6 +6,7 @@ from collectors.composite_adapter import CompositeMarketDataProvider
 from collectors.dexscreener_adapter import DexScreenerAdapter
 from collectors.helius_rpc_adapter import HeliusRpcAdapter
 from collectors.mock_pump_collector import MockMarketDataProvider, MockPumpCollector
+from collectors.resilience import AsyncRateLimiter, execute_with_retry
 
 __all__ = [
     "BaseCollector",
@@ -16,4 +17,6 @@ __all__ = [
     "CompositeMarketDataProvider",
     "MockMarketDataProvider",
     "MockPumpCollector",
+    "AsyncRateLimiter",
+    "execute_with_retry",
 ]
