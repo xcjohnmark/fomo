@@ -3,6 +3,8 @@
 from strategy.scoring import MomentumScorer, get_score_tier
 from strategy.classifier import SetupClassifier
 from strategy.history_analyzer import HistoryAnalyzer, HistoryTrends
+from strategy.target_selector import TargetSelector
+from strategy.trade_planner import QuickFlipTradePlanner
 from strategy.engine import MomentumStrategyEngine
 
 __all__ = [
@@ -11,5 +13,7 @@ __all__ = [
     "SetupClassifier",
     "HistoryAnalyzer",
     "HistoryTrends",
+    "TargetSelector",
+    "QuickFlipTradePlanner",
     "MomentumStrategyEngine",
 ]

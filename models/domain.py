@@ -287,6 +287,55 @@ class MomentumAnalysis(BaseModel):
     raw_breakdown: Optional[ScoreBreakdown] = None
 
 
+class PlanStatus(str, Enum):
+    """Trade plan operational readiness status."""
+    READY = "READY"
+    EXTENDED = "EXTENDED"
+    NO_PLAN = "NO_PLAN"
+
+
+class PriceZone(BaseModel):
+    """Numerical price boundary representing entry or target range."""
+    low: float = Field(..., description="Lower price threshold")
+    high: float = Field(..., description="Upper price threshold")
+    mid: float = Field(..., description="Target or execution midpoint")
+
+
+class QuickFlipPlan(BaseModel):
+    """Actionable trade blueprint derived from MomentumAnalysis and market micro-structure."""
+    model_config = ConfigDict(extra="ignore")
+
+    token_address: str
+    symbol: Optional[str] = None
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    status: PlanStatus = Field(..., description="READY, EXTENDED, or NO_PLAN")
+
+    # Entry Specifications
+    entry_price: Optional[float] = Field(default=None, description="Current spot / baseline entry price")
+    entry_market_cap: Optional[float] = Field(default=None, description="Market cap at entry")
+    entry_zone: Optional[PriceZone] = Field(default=None, description="Acceptable entry execution price band")
+
+    # Profit Targets (never guaranteed)
+    target_price: Optional[float] = Field(default=None, description="Selected realistic profit target")
+    target_market_cap: Optional[float] = Field(default=None, description="Target market cap")
+    target_percentage: Optional[float] = Field(default=None, description="Target gain percentage (%)")
+    target_zone: Optional[PriceZone] = Field(default=None, description="Target price range for scaling out")
+
+    # Thesis Invalidation (Strict Cutoff)
+    invalidation_price: Optional[float] = Field(default=None, description="Thesis failure invalidation level")
+    invalidation_market_cap: Optional[float] = Field(default=None, description="Market cap at invalidation")
+    invalidation_percentage: Optional[float] = Field(default=None, description="Loss percentage if invalidated (%)")
+
+    # Risk Metrics & Time Horizon
+    risk_reward_ratio: Optional[float] = Field(default=None, description="Target gain vs Invalidation risk ratio")
+    expected_holding_minutes: Optional[int] = Field(default=None, description="Expected short-term holding window")
+
+    # Context & Rationale
+    risk_flags: List[str] = Field(default_factory=list, description="Specific risk and execution flags")
+    plan_reason: str = Field(..., description="Explanation of why this plan was formed or rejected")
+
+
 class AlertCandidate(BaseModel):
     """Qualified token candidate ready for dispatch, confirmation, and recording."""
     token: TokenSnapshot
@@ -300,3 +349,4 @@ class AlertCandidate(BaseModel):
     invalidation_criteria: str
     next_action: str
     analysis: Optional[MomentumAnalysis] = None
+    plan: Optional[QuickFlipPlan] = None

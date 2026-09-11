@@ -104,6 +104,10 @@ class MomentumStrategyEngine:
         breadth = f"{token.buyer_ratio:.0f}% buyer breadth" if token.buyer_ratio is not None else "Breadth N/A"
         alert_reason = f"5M price acceleration ({p5m}) with {flow} and {breadth}"
 
+        # 7. Generate QuickFlipPlan
+        from strategy.trade_planner import QuickFlipTradePlanner
+        plan = QuickFlipTradePlanner.generate_plan(analysis, token)
+
         return AlertCandidate(
             token=token,
             score_result=score_result,
@@ -116,7 +120,17 @@ class MomentumStrategyEngine:
             invalidation_criteria="; ".join(analysis.invalidation_conditions),
             next_action=analysis.next_action,
             analysis=analysis,
+            plan=plan,
         )
+
+    def plan_trade(
+        self, history: Union[TokenSnapshot, List[TokenSnapshot]]
+    ) -> QuickFlipPlan:
+        """Analyze setup and construct an actionable QuickFlipPlan."""
+        from strategy.trade_planner import QuickFlipTradePlanner
+
+        analysis = self.analyze(history)
+        return QuickFlipTradePlanner.generate_plan(analysis, history)
 
     def evaluate_tokens(self, tokens: List[TokenSnapshot]) -> List[AlertCandidate]:
         """Evaluate a batch of active tokens and return all qualified candidates."""
