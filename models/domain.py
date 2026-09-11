@@ -1,9 +1,9 @@
-"""Domain models and Pydantic schemas for research and alerting."""
+"""Internal domain schema: TokenSnapshot and strategy evaluation models."""
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Optional
-from pydantic import BaseModel, Field, computed_field
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class SetupClassification(str, Enum):
@@ -24,78 +24,149 @@ class ConfirmationState(str, Enum):
     INVALIDATED = "Invalidated"
 
 
-class NormalizedTokenData(BaseModel):
-    """Strictly normalized token data snapshot independent of data provider."""
+class TokenSnapshot(BaseModel):
+    """Normalized internal market snapshot strictly decoupled from external providers.
 
+    STRICT STRATEGY RULE:
+    If a field is not available from an external provider, it is represented as None.
+    NEVER invent, estimate, or default missing metrics to zero.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    # Identifiers
+    token_address: str = Field(..., description="Token contract / mint address (CA)")
+    chain: str = Field(default="solana", description="Blockchain network (e.g. 'solana')")
+    pool_address: Optional[str] = Field(default=None, description="Liquidity pool / pair address")
+    symbol: Optional[str] = Field(default=None, description="Token ticker symbol")
+    name: Optional[str] = Field(default=None, description="Token name")
+
+    # Timestamp & Data Provenance
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        description="UTC timestamp of the snapshot",
+        description="UTC timestamp when snapshot was captured/normalized",
     )
-    token: str = Field(..., description="Token symbol or name (e.g. XYZ)")
-    token_address: str = Field(..., description="Contract address / mint address")
-
-    market_cap: float = Field(..., ge=0.0, description="Current market capitalization in USD")
-    price: float = Field(..., ge=0.0, description="Current token price in USD")
-    liquidity: float = Field(..., ge=0.0, description="Available pool liquidity in USD")
-
-    # Percentage changes
-    change_5m: float = Field(..., description="5-minute price change percentage")
-    change_1h: float = Field(..., description="1-hour price change percentage")
-    change_4h: float = Field(..., description="4-hour price change percentage")
-    change_24h: float = Field(..., description="24-hour price change percentage")
-
-    # Volume metrics
-    volume_5m: float = Field(..., ge=0.0, description="5-minute trading volume in USD")
-    volume_1h: float = Field(..., ge=0.0, description="1-hour trading volume in USD")
-    volume_24h: float = Field(..., ge=0.0, description="24-hour trading volume in USD")
-
-    # Order flow counts
-    buys: int = Field(default=0, ge=0, description="Number of buy transactions")
-    sells: int = Field(default=0, ge=0, description="Number of sell transactions")
-    buy_volume: Optional[float] = Field(default=None, ge=0.0, description="Buy volume in USD")
-    sell_volume: Optional[float] = Field(default=None, ge=0.0, description="Sell volume in USD")
-
-    # Participant breadth
-    buyers: int = Field(default=0, ge=0, description="Unique buyer wallet count")
-    sellers: int = Field(default=0, ge=0, description="Unique seller wallet count")
-
-    # Structure & distribution
-    holders: int = Field(default=0, ge=0, description="Total holder count")
-    top10_percentage: float = Field(
-        default=0.0, ge=0.0, le=100.0, description="Supply held by top 10 wallets %"
+    provider_source: str = Field(
+        default="unknown",
+        description="Name of the adapter/provider that produced this snapshot",
     )
 
-    # Contextual data
-    age: str = Field(default="UNKNOWN", description="Token age (e.g. '2h 14m')")
-    age_minutes: Optional[int] = Field(default=None, ge=0, description="Age in minutes if known")
-    trader_activity: str = Field(default="UNKNOWN", description="Observed smart/active trader activity")
-    narrative: str = Field(default="UNKNOWN", description="Associated meme/catalyst narrative")
+    # Core Pricing & Liquidity (USD)
+    price_usd: Optional[float] = Field(default=None, ge=0.0, description="Current price in USD")
+    market_cap_usd: Optional[float] = Field(default=None, ge=0.0, description="Market cap in USD")
+    liquidity_usd: Optional[float] = Field(default=None, ge=0.0, description="Pool liquidity in USD")
+
+    # Percentage Price Changes
+    change_5m_pct: Optional[float] = Field(default=None, description="5-minute price change %")
+    change_1h_pct: Optional[float] = Field(default=None, description="1-hour price change %")
+    change_4h_pct: Optional[float] = Field(default=None, description="4-hour price change %")
+    change_24h_pct: Optional[float] = Field(default=None, description="24-hour price change %")
+
+    # Trading Volumes (USD)
+    volume_5m_usd: Optional[float] = Field(default=None, ge=0.0, description="5-minute volume in USD")
+    volume_1h_usd: Optional[float] = Field(default=None, ge=0.0, description="1-hour volume in USD")
+    volume_24h_usd: Optional[float] = Field(default=None, ge=0.0, description="24-hour volume in USD")
+
+    # Flow & Transaction Counts
+    buys: Optional[int] = Field(default=None, ge=0, description="Buy transaction count")
+    sells: Optional[int] = Field(default=None, ge=0, description="Sell transaction count")
+    buy_volume_usd: Optional[float] = Field(default=None, ge=0.0, description="Buy volume in USD")
+    sell_volume_usd: Optional[float] = Field(default=None, ge=0.0, description="Sell volume in USD")
+
+    # Participant Breadth
+    buyers: Optional[int] = Field(default=None, ge=0, description="Unique buyer wallet count")
+    sellers: Optional[int] = Field(default=None, ge=0, description="Unique seller wallet count")
+
+    # Distribution & Holders
+    holders_count: Optional[int] = Field(default=None, ge=0, description="Total token holders count")
+    top10_holder_pct: Optional[float] = Field(
+        default=None, ge=0.0, le=100.0, description="Percentage of supply held by top 10 wallets"
+    )
+
+    # Token Age
+    token_age_seconds: Optional[int] = Field(default=None, ge=0, description="Token age in seconds")
+    token_age_formatted: Optional[str] = Field(default=None, description="Formatted age (e.g. '2h 14m')")
+
+    # Qualitative & Smart Money Signals
+    trader_activity_summary: Optional[str] = Field(
+        default=None, description="Observed smart/active trader activity summary"
+    )
+    narrative: Optional[str] = Field(
+        default=None, description="Associated meme/catalyst narrative if identified"
+    )
+
+    # Raw Payload (for debugging / audit)
+    raw_metadata: Optional[Dict[str, Any]] = Field(
+        default=None, description="Raw provider payload for audit and research"
+    )
 
     @computed_field
     @property
-    def liquidity_ratio(self) -> float:
-        """Liquidity to Market Cap ratio (%)."""
-        if self.market_cap <= 0:
-            return 0.0
-        return (self.liquidity / self.market_cap) * 100.0
+    def liquidity_ratio(self) -> Optional[float]:
+        """Liquidity to Market Cap ratio (%). Returns None if either metric is missing."""
+        if self.liquidity_usd is None or self.market_cap_usd is None or self.market_cap_usd <= 0:
+            return None
+        return (self.liquidity_usd / self.market_cap_usd) * 100.0
 
     @computed_field
     @property
-    def buy_tx_ratio(self) -> float:
-        """Ratio of buy transactions to total transactions (%)."""
+    def buy_tx_ratio(self) -> Optional[float]:
+        """Ratio of buy transactions to total transactions (%). Returns None if missing."""
+        if self.buys is None or self.sells is None:
+            return None
         total = self.buys + self.sells
         if total == 0:
-            return 0.0
+            return None
         return (self.buys / total) * 100.0
 
     @computed_field
     @property
-    def buyer_ratio(self) -> float:
-        """Ratio of unique buyers to total active traders (%)."""
+    def buyer_ratio(self) -> Optional[float]:
+        """Ratio of unique buyers to total active traders (%). Returns None if missing."""
+        if self.buyers is None or self.sellers is None:
+            return None
         total = self.buyers + self.sellers
         if total == 0:
-            return 0.0
+            return None
         return (self.buyers / total) * 100.0
+
+    @property
+    def token(self) -> str:
+        """Compatibility property returning symbol or short address."""
+        return self.symbol or self.token_address[:8]
+
+    def is_available(self, field_name: str) -> bool:
+        """Check if a specific field has a valid, non-None value."""
+        return getattr(self, field_name, None) is not None
+
+    def get_missing_fields(self) -> List[str]:
+        """Return list of all strategy fields that are unavailable (None)."""
+        core_fields = [
+            "price_usd",
+            "market_cap_usd",
+            "liquidity_usd",
+            "change_5m_pct",
+            "change_1h_pct",
+            "change_4h_pct",
+            "change_24h_pct",
+            "volume_5m_usd",
+            "volume_1h_usd",
+            "volume_24h_usd",
+            "buys",
+            "sells",
+            "buyers",
+            "sellers",
+            "holders_count",
+            "top10_holder_pct",
+            "token_age_seconds",
+            "trader_activity_summary",
+            "narrative",
+        ]
+        return [f for f in core_fields if getattr(self, f) is None]
+
+
+# Alias for backward-compatibility during transition
+NormalizedTokenData = TokenSnapshot
 
 
 class ScoreBreakdown(BaseModel):
@@ -110,6 +181,12 @@ class ScoreBreakdown(BaseModel):
     top10_score: float = Field(..., ge=0.0, le=5.0)
     trader_activity_score: float = Field(..., ge=0.0, le=5.0)
     narrative_score: float = Field(..., ge=0.0, le=5.0)
+
+    # Missing dimension tracking
+    unavailable_dimensions: List[str] = Field(
+        default_factory=list,
+        description="Dimensions that could not be evaluated due to missing provider data",
+    )
 
     @computed_field
     @property
@@ -137,11 +214,12 @@ class MomentumScoreResult(BaseModel):
     status_summary: str
     reasons: List[str] = Field(default_factory=list)
     risks: List[str] = Field(default_factory=list)
+    missing_metrics: List[str] = Field(default_factory=list)
 
 
 class AlertCandidate(BaseModel):
     """Qualified token candidate ready for dispatch, confirmation, and recording."""
-    token: NormalizedTokenData
+    token: TokenSnapshot
     score_result: MomentumScoreResult
     classification: SetupClassification
     confirmation_state: ConfirmationState

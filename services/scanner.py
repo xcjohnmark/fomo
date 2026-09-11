@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import logging
 from typing import Dict, List, Optional
 
-from collectors.base import BaseCollector
+from collectors.base import BaseCollector, MarketDataProvider
 from config.settings import Settings, get_settings
 from models.domain import AlertCandidate
 from services.alert_recorder import AlertRecorder
@@ -21,7 +21,7 @@ class MarketScannerService:
 
     def __init__(
         self,
-        collector: BaseCollector,
+        collector: MarketDataProvider,
         strategy_engine: MomentumStrategyEngine,
         alert_recorder: AlertRecorder,
         outcome_tracker: OutcomeTracker,
@@ -52,7 +52,7 @@ class MarketScannerService:
         logger.debug("Executing market scan cycle...")
 
         # 1. Fetch normalized market data
-        tokens = await self.collector.get_active_tokens()
+        tokens = await self.collector.fetch_active_tokens()
         logger.debug("Fetched %d tokens from collector", len(tokens))
 
         # 2. Evaluate against strategy engine
@@ -64,16 +64,21 @@ class MarketScannerService:
         # 3. Process each qualified candidate
         for candidate in candidates:
             address = candidate.token.token_address
+            name = candidate.token.symbol or address[:8]
             if self.is_on_cooldown(address):
-                logger.debug("Skipping %s: currently on cooldown", candidate.token.token)
+                logger.debug("Skipping %s: currently on cooldown", name)
                 continue
 
+            mc_str = f"${candidate.token.market_cap_usd:,.0f}" if candidate.token.market_cap_usd is not None else "N/A"
+            liq_str = f"${candidate.token.liquidity_usd:,.0f}" if candidate.token.liquidity_usd is not None else "N/A"
+
             logger.info(
-                "[ALERT TRIGGERED] Momentum Alert: %s (Score: %s/100, MC: $%s, Liq: $%s)",
-                candidate.token.token,
+                "[ALERT TRIGGERED] Momentum Alert: %s (Score: %s/100, MC: %s, Liq: %s, Source: %s)",
+                name,
                 candidate.score_result.score,
-                f"{candidate.token.market_cap:,.0f}",
-                f"{candidate.token.liquidity:,.0f}",
+                mc_str,
+                liq_str,
+                candidate.token.provider_source,
             )
 
             # Send Telegram alert

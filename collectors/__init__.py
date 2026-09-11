@@ -1,6 +1,19 @@
-"""Collectors package containing data provider abstractions and implementations."""
+"""Collectors and data provider adapters package."""
 
-from collectors.base import BaseCollector
-from collectors.mock_pump_collector import MockPumpCollector
+from collectors.base import BaseCollector, MarketDataProvider
+from collectors.birdeye_adapter import BirdeyeAdapter
+from collectors.composite_adapter import CompositeMarketDataProvider
+from collectors.dexscreener_adapter import DexScreenerAdapter
+from collectors.helius_rpc_adapter import HeliusRpcAdapter
+from collectors.mock_pump_collector import MockMarketDataProvider, MockPumpCollector
 
-__all__ = ["BaseCollector", "MockPumpCollector"]
+__all__ = [
+    "BaseCollector",
+    "MarketDataProvider",
+    "DexScreenerAdapter",
+    "BirdeyeAdapter",
+    "HeliusRpcAdapter",
+    "CompositeMarketDataProvider",
+    "MockMarketDataProvider",
+    "MockPumpCollector",
+]

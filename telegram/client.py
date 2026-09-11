@@ -36,11 +36,12 @@ class TelegramNotifier:
     async def send_alert(self, candidate: AlertCandidate) -> bool:
         """Format and dispatch an alert to Telegram or logger."""
         text = format_telegram_alert(candidate)
+        token_name = candidate.token.symbol or candidate.token.token_address[:8]
 
         if not self.is_configured:
             logger.info(
                 "[TELEGRAM DRY-RUN ALERT] %s (Score: %s):\n%s",
-                candidate.token.token,
+                token_name,
                 candidate.score_result.score,
                 text,
             )
@@ -50,10 +51,10 @@ class TelegramNotifier:
             assert self._bot is not None
             assert self.chat_id is not None
             await self._bot.send_message(chat_id=self.chat_id, text=text)
-            logger.info("Telegram alert sent successfully for %s", candidate.token.token)
+            logger.info("Telegram alert sent successfully for %s", token_name)
             return True
         except Exception as e:
-            logger.error("Failed to send Telegram alert for %s: %s", candidate.token.token, e)
+            logger.error("Failed to send Telegram alert for %s: %s", token_name, e)
             return False
 
     async def health_check(self) -> bool:

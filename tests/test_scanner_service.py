@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import pytest
 from collectors.mock_pump_collector import MockPumpCollector
 from config.settings import Settings
-from models.domain import NormalizedTokenData
+from models.domain import TokenSnapshot
 from services.alert_recorder import AlertRecorder
 from services.outcome_tracker import OutcomeTracker
 from services.scanner import MarketScannerService
@@ -14,7 +14,7 @@ from telegram.client import TelegramNotifier
 
 @pytest.mark.asyncio
 async def test_end_to_end_scanner_pipeline(
-    session_factory, test_settings: Settings, sample_strong_token: NormalizedTokenData, sample_weak_token: NormalizedTokenData
+    session_factory, test_settings: Settings, sample_strong_token: TokenSnapshot, sample_weak_token: TokenSnapshot
 ):
     """Verify that scanner runs, detects strong candidate, persists alert, and tracks outcome."""
     collector = MockPumpCollector(initial_tokens=[sample_strong_token, sample_weak_token])
@@ -35,7 +35,7 @@ async def test_end_to_end_scanner_pipeline(
     # 1. Execute single scan cycle
     candidates = await scanner.scan_once()
     assert len(candidates) == 1
-    assert candidates[0].token.token == "STRONG"
+    assert candidates[0].token.symbol == "STRONG"
     assert candidates[0].score_result.score >= 85.0
 
     # 2. Verify alert persisted in database
@@ -44,13 +44,14 @@ async def test_end_to_end_scanner_pipeline(
     alert = recent_alerts[0]
     assert alert.token_symbol == "STRONG"
     assert alert.momentum_score >= 85.0
-    assert alert.price == sample_strong_token.price
+    assert alert.price == sample_strong_token.price_usd
 
     # 3. Simulate price movement for outcome tracking
     # Price rises 25% after 10 minutes
+    assert sample_strong_token.price_usd is not None
     new_token_state = sample_strong_token.model_copy(
         update={
-            "price": sample_strong_token.price * 1.25,
+            "price_usd": sample_strong_token.price_usd * 1.25,
             # Backdate alert timestamp so elapsed minutes >= 10
             "timestamp": datetime.fromtimestamp(
                 sample_strong_token.timestamp.timestamp() - 700, tz=timezone.utc

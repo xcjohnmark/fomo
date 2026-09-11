@@ -5,7 +5,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from collectors.base import BaseCollector
+from collectors.base import BaseCollector, MarketDataProvider
 from models.db import PriceObservation, SetupOutcome, TokenAlert
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ class OutcomeTracker:
 
     TARGET_INTERVALS = [5, 10, 20, 30, 60]
 
-    def __init__(self, session_factory, collector: BaseCollector):
+    def __init__(self, session_factory, collector: MarketDataProvider):
         self.session_factory = session_factory
         self.collector = collector
 
@@ -36,6 +36,9 @@ class OutcomeTracker:
             open_alerts = list(result.scalars().all())
 
         for alert in open_alerts:
+            if alert.price is None or alert.price <= 0:
+                continue
+
             current_price = await self.collector.get_current_price(alert.token_address)
             if current_price is None or current_price <= 0:
                 continue

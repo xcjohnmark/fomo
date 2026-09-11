@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Dict
 from sqlalchemy import text
-from collectors.base import BaseCollector
+from collectors.base import BaseCollector, MarketDataProvider
 from telegram.client import TelegramNotifier
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ class HealthCheckService:
     def __init__(
         self,
         session_factory,
-        collector: BaseCollector,
+        collector: MarketDataProvider,
         telegram_notifier: TelegramNotifier,
     ):
         self.session_factory = session_factory

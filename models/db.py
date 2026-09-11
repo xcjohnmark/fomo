@@ -23,8 +23,9 @@ class TokenAlert(Base, TimestampMixin):
     __tablename__ = "token_alerts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    token_symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    token_symbol: Mapped[str] = mapped_column(String(32), index=True, default="UNKNOWN", nullable=False)
     token_address: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    provider_source: Mapped[str] = mapped_column(String(64), default="unknown", nullable=False)
 
     alert_timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -33,31 +34,31 @@ class TokenAlert(Base, TimestampMixin):
         nullable=False,
     )
 
-    # Core market metrics
-    market_cap: Mapped[float] = mapped_column(Float, nullable=False)
-    price: Mapped[float] = mapped_column(Float, nullable=False)
-    liquidity: Mapped[float] = mapped_column(Float, nullable=False)
+    # Core market metrics (nullable if unavailable from a specific provider)
+    market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    liquidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Momentum timeframes
-    change_5m: Mapped[float] = mapped_column(Float, nullable=False)
-    change_1h: Mapped[float] = mapped_column(Float, nullable=False)
-    change_4h: Mapped[float] = mapped_column(Float, nullable=False)
-    change_24h: Mapped[float] = mapped_column(Float, nullable=False)
+    change_5m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    change_1h: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    change_4h: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    change_24h: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Volumes
-    volume_5m: Mapped[float] = mapped_column(Float, nullable=False)
-    volume_1h: Mapped[float] = mapped_column(Float, nullable=False)
-    volume_24h: Mapped[float] = mapped_column(Float, nullable=False)
+    volume_5m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    volume_1h: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    volume_24h: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Flow & breadth
-    buys: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    sells: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    buyers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    sellers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    buys: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sells: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    buyers: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sellers: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Distribution
-    holders: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    top10_percentage: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    holders: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    top10_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Qualitative context
     age: Mapped[str] = mapped_column(String(64), default="UNKNOWN", nullable=False)
