@@ -241,3 +241,46 @@ class SetupOutcome(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(32), default="OPEN", nullable=False)
 
     alert: Mapped["TokenAlert"] = relationship("TokenAlert", back_populates="outcome")
+
+
+# =====================================================================
+# Phase 6 Paper Trading & Watchlist Models
+# =====================================================================
+
+class PaperTrade(Base, TimestampMixin):
+    """Simulated paper trade execution record for performance tracking."""
+
+    __tablename__ = "paper_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_address: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    symbol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+
+    entry_price: Mapped[float] = mapped_column(Float, nullable=False)
+    entry_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    target_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    invalidation_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    invalidation_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    status: Mapped[str] = mapped_column(String(32), default="OPEN", index=True, nullable=False)
+    exit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    exit_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    pnl_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    expected_holding_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class WatchlistToken(Base, TimestampMixin):
+    """Dedicated tokens actively monitored on user watchlist."""
+
+    __tablename__ = "watchlist_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_address: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    symbol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+

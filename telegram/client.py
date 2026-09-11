@@ -11,6 +11,7 @@ except ImportError:
 from config.settings import Settings, get_settings
 from models.domain import AlertCandidate
 from telegram.formatter import format_telegram_alert
+from telegram.keyboards import get_alert_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,14 @@ class TelegramNotifier:
         """Format and dispatch an alert to Telegram or logger."""
         text = format_telegram_alert(candidate)
         token_name = candidate.token.symbol or candidate.token.token_address[:8]
+        reply_markup = get_alert_keyboard(
+            token_address=candidate.token.token_address,
+            chain=candidate.token.chain or "solana",
+        )
 
         if not self.is_configured:
             logger.info(
-                "[TELEGRAM DRY-RUN ALERT] %s (Score: %s):\n%s",
+                "[TELEGRAM DRY-RUN ALERT] %s (Score: %s):\n%s\n[Buttons: View Token | Watch | Paper Trade | Ignore]",
                 token_name,
                 candidate.score_result.score,
                 text,
@@ -50,7 +55,11 @@ class TelegramNotifier:
         try:
             assert self._bot is not None
             assert self.chat_id is not None
-            await self._bot.send_message(chat_id=self.chat_id, text=text)
+            await self._bot.send_message(
+                chat_id=self.chat_id,
+                text=text,
+                reply_markup=reply_markup,
+            )
             logger.info("Telegram alert sent successfully for %s", token_name)
             return True
         except Exception as e:
