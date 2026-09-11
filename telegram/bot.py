@@ -354,21 +354,22 @@ class TelegramBotService:
 
         elif action == "paper":
             token_address = param
-            # Execute simulated trade
+            now = datetime.now(timezone.utc)
+            # Fetch current live spot snapshot
             snapshot = None
             if self.collector:
                 snapshot = await self.collector.fetch_token_snapshot(token_address)
 
             entry_price = snapshot.price_usd if snapshot and snapshot.price_usd else 0.0001
             entry_mc = snapshot.market_cap_usd if snapshot and snapshot.market_cap_usd else 100_000.0
-            symbol = snapshot.symbol if snapshot else "TOKEN"
+            symbol = snapshot.symbol if snapshot and snapshot.symbol else "TOKEN"
 
             target_price = entry_price * 1.25
             target_mc = entry_mc * 1.25
             invalidation_price = entry_price * 0.92
             invalidation_mc = entry_mc * 0.92
 
-            await self.paper_trader.open_trade(
+            trade = await self.paper_trader.open_trade(
                 token_address=token_address,
                 symbol=symbol,
                 entry_price=entry_price,
@@ -378,8 +379,34 @@ class TelegramBotService:
                 invalidation_price=invalidation_price,
                 invalidation_market_cap=invalidation_mc,
                 expected_holding_minutes=25,
+                entry_timestamp=now,
             )
-            await query.answer(f"📝 Opened Paper Trade for ${symbol}!")
+
+            await query.answer(f"📝 Paper Trade executed for ${symbol}!")
+
+            # Send execution card
+            mc_str = f"${entry_mc:,.0f}" if entry_mc else "N/A"
+            target_mc_str = f"${target_mc:,.0f}" if target_mc else "N/A"
+            inval_mc_str = f"${invalidation_mc:,.0f}" if invalidation_mc else "N/A"
+            exec_card = (
+                "📝 PAPER TRADE EXECUTED\n"
+                "=======================\n"
+                f"${symbol}\n"
+                f"Entry Price: ${entry_price:.8f}\n"
+                f"Entry MC: {mc_str}\n"
+                f"Entry Time: {now.strftime('%H:%M:%S UTC')}\n\n"
+                f"Target: {target_mc_str} MC (+25.0%)\n"
+                f"Invalidation: Below {inval_mc_str} MC (-8.0%)\n"
+                "Status: MONITORING ACTIVE\n"
+                "======================="
+            )
+            if update and getattr(update, "effective_message", None):
+                reply_fn = getattr(update.effective_message, "reply_text", None)
+                if callable(reply_fn):
+                    resp = reply_fn(exec_card)
+                    if hasattr(resp, "__await__"):
+                        await resp
+
             return "paper_opened"
 
         elif action == "ignore":

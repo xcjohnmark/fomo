@@ -255,9 +255,9 @@ def test_inline_keyboard_generation(sample_candidate):
     assert row1[1].text == "👀 Watch"
     assert row1[1].callback_data == f"watch:{sample_candidate.token.token_address}"
 
-    # Row 2: [Paper Trade] [Ignore]
+    # Row 2: [PAPER TRADE] [Ignore]
     row2 = kb.inline_keyboard[1]
-    assert row2[0].text == "📝 Paper Trade"
+    assert row2[0].text == "📝 PAPER TRADE"
     assert row2[0].callback_data == f"paper:{sample_candidate.token.token_address}"
     assert row2[1].text == "❌ Ignore"
     assert row2[1].callback_data == f"ignore:{sample_candidate.token.token_address}"
@@ -440,3 +440,66 @@ async def test_bot_callbacks():
     res4 = await bot.button_callback(update_mock, None)
     assert res4 == "settings_updated"
     assert bot.alerts_paused is True
+
+
+@pytest.mark.asyncio
+async def test_paper_trade_button_records_entry_metadata_and_monitors():
+    """Verify Alert -> Paper Trade -> Simulated Entry (timestamp, price, MC) -> Monitor -> Exit -> Track Record."""
+    mock_collector = MagicMock()
+    mock_snapshot = TokenSnapshot(
+        token_address="SimulatedToken1234567890abcdef",
+        symbol="SIM",
+        chain="solana",
+        price_usd=0.000250,
+        market_cap_usd=250000.0,
+        liquidity_usd=50000.0,
+        change_5m_pct=10.0,
+    )
+    mock_collector.fetch_token_snapshot = AsyncMock(return_value=mock_snapshot)
+    mock_collector.get_current_price = AsyncMock(return_value=0.000350)
+
+    bot = TelegramBotService(collector=mock_collector)
+
+    # 1. Simulate user pressing PAPER TRADE button
+    update_mock = MagicMock()
+    query_mock = AsyncMock()
+    update_mock.callback_query = query_mock
+    query_mock.data = f"paper:{mock_snapshot.token_address}"
+
+    cb_res = await bot.button_callback(update_mock, None)
+    assert cb_res == "paper_opened"
+
+    # 2. Verify exact recorded simulated entry fields
+    open_trades = await bot.paper_trader.get_open_trades()
+    assert len(open_trades) == 1
+    t = open_trades[0]
+    assert t["token_address"] == mock_snapshot.token_address
+    assert t["symbol"] == "SIM"
+    assert t["entry_price"] == pytest.approx(0.000250)
+    assert t["entry_market_cap"] == pytest.approx(250000.0)
+    assert t["entry_timestamp"] is not None
+    assert t["status"] == "OPEN"
+
+    # 3. Monitor open simulated trades: price advanced to target (0.000350 >= target 0.0003125)
+    resolved_count = await bot.paper_trader.monitor_open_paper_trades(mock_collector)
+    assert resolved_count == 1
+
+    # 4. Verify resolved exit and performance track record
+    closed_trades = await bot.paper_trader.get_recent_closed()
+    assert len(closed_trades) == 1
+    c = closed_trades[0]
+    assert c["status"] == "TARGET_HIT"
+    assert c["exit_reason"] == "TARGET_HIT"
+    assert c["entry_price"] == pytest.approx(0.000250)
+    assert c["entry_mc"] == pytest.approx(250000.0)
+    assert c["exit_price"] == pytest.approx(0.000350)
+    assert c["exit_time"] is not None
+    assert c["pnl_pct"] == pytest.approx(40.0)
+
+    # 5. Check track record statistics
+    stats = await bot.paper_trader.get_performance_stats()
+    assert stats["total_trades"] == 1
+    assert stats["winning_trades"] == 1
+    assert stats["avg_gain_pct"] == pytest.approx(40.0)
+    assert stats["profit_factor"] > 0
+

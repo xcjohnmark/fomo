@@ -257,22 +257,69 @@ class PaperTrade(Base, TimestampMixin):
     token_address: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
     symbol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
-    entry_price: Mapped[float] = mapped_column(Float, nullable=False)
-    entry_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Simulated Entry Recording (Explicit user fields)
+    paper_entry_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    paper_entry_price: Mapped[float] = mapped_column(Float, nullable=False)
+    paper_entry_mc: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Simulated Targets & Stops
     target_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     target_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     invalidation_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     invalidation_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Simulated Exit & Resolution
     status: Mapped[str] = mapped_column(String(32), default="OPEN", index=True, nullable=False)
-    exit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    exit_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    pnl_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    paper_exit_timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    paper_exit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    paper_exit_mc: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    paper_exit_reason: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    paper_pnl_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    expected_holding_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    expected_holding_minutes: Mapped[Optional[int]] = mapped_column(Integer, default=30, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Aliases for backward compatibility
+    @property
+    def entry_price(self) -> float:
+        return self.paper_entry_price
+
+    @entry_price.setter
+    def entry_price(self, val: float) -> None:
+        self.paper_entry_price = val
+
+    @property
+    def entry_market_cap(self) -> Optional[float]:
+        return self.paper_entry_mc
+
+    @entry_market_cap.setter
+    def entry_market_cap(self, val: Optional[float]) -> None:
+        self.paper_entry_mc = val
+
+    @property
+    def exit_price(self) -> Optional[float]:
+        return self.paper_exit_price
+
+    @exit_price.setter
+    def exit_price(self, val: Optional[float]) -> None:
+        self.paper_exit_price = val
+
+    @property
+    def exit_time(self) -> Optional[datetime]:
+        return self.paper_exit_timestamp
+
+    @exit_time.setter
+    def exit_time(self, val: Optional[datetime]) -> None:
+        self.paper_exit_timestamp = val
+
+    @property
+    def pnl_pct(self) -> Optional[float]:
+        return self.paper_pnl_pct
+
+    @pnl_pct.setter
+    def pnl_pct(self, val: Optional[float]) -> None:
+        self.paper_pnl_pct = val
 
 
 class WatchlistToken(Base, TimestampMixin):

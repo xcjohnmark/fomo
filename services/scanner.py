@@ -11,6 +11,7 @@ from models.domain import AlertCandidate
 from services.alert_recorder import AlertRecorder
 from services.call_outcome_monitor import CallOutcomeMonitor
 from services.outcome_tracker import OutcomeTracker
+from services.paper_trader import PaperTraderService
 from strategy.engine import MomentumStrategyEngine
 from telegram.client import TelegramNotifier
 
@@ -28,6 +29,7 @@ class MarketScannerService:
         outcome_tracker: OutcomeTracker,
         telegram_notifier: TelegramNotifier,
         call_monitor: Optional[CallOutcomeMonitor] = None,
+        paper_trader: Optional[PaperTraderService] = None,
         settings: Optional[Settings] = None,
     ):
         self.collector = collector
@@ -36,6 +38,7 @@ class MarketScannerService:
         self.outcome_tracker = outcome_tracker
         self.telegram_notifier = telegram_notifier
         self.call_monitor = call_monitor
+        self.paper_trader = paper_trader
         self.settings = settings or get_settings()
 
         # Cooldown map: token_address -> last_alert_timestamp
@@ -108,6 +111,12 @@ class MarketScannerService:
             monitored_calls = await self.call_monitor.monitor_open_calls()
             if monitored_calls > 0:
                 logger.debug("Monitored and evaluated %d open strategy calls", monitored_calls)
+
+        # 6. Monitor open simulated paper trades
+        if self.paper_trader:
+            resolved_paper = await self.paper_trader.monitor_open_paper_trades(self.collector)
+            if resolved_paper > 0:
+                logger.debug("Evaluated and resolved %d simulated paper trades", resolved_paper)
 
         return dispatched_candidates
 

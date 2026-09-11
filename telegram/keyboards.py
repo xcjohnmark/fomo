@@ -22,7 +22,7 @@ def get_alert_keyboard(token_address: str, chain: str = "solana") -> InlineKeybo
             InlineKeyboardButton("👀 Watch", callback_data=f"watch:{token_address}"),
         ],
         [
-            InlineKeyboardButton("📝 Paper Trade", callback_data=f"paper:{token_address}"),
+            InlineKeyboardButton("📝 PAPER TRADE", callback_data=f"paper:{token_address}"),
             InlineKeyboardButton("❌ Ignore", callback_data=f"ignore:{token_address}"),
         ],
     ]
