@@ -9,6 +9,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
 )
@@ -283,4 +284,61 @@ class WatchlistToken(Base, TimestampMixin):
     token_address: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     symbol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+# =====================================================================
+# Phase 7 & 8 Strategy Call Research Ledger & Outcome Records
+# =====================================================================
+
+class StrategyCall(Base, TimestampMixin):
+    """Permanent immutable research observation for every generated Quick Flip setup."""
+
+    __tablename__ = "strategy_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    call_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    token_ca: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
+    chain: Mapped[str] = mapped_column(String(32), default="solana", nullable=False)
+    pool_address: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    symbol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    strategy_version: Mapped[str] = mapped_column(String(32), default="v1.0", nullable=False)
+    momentum_score: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Immutable initial call plan parameters
+    entry_price: Mapped[float] = mapped_column(Float, nullable=False)
+    entry_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_zone_low: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_zone_high: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    target_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    invalidation_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    invalidation_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    expected_holding_minutes: Mapped[Optional[int]] = mapped_column(Integer, default=30, nullable=True)
+    setup_state: Mapped[str] = mapped_column(String(64), default="CONFIRMED", nullable=False)
+
+    reasons: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    risk_flags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+
+    # Dynamic observation and outcome resolution fields
+    outcome_status: Mapped[str] = mapped_column(String(32), default="OPEN", index=True, nullable=False)
+    actual_peak_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    actual_peak_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    actual_low_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    actual_exit_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    time_to_target: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    time_to_invalidation: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    max_favorable_excursion: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    max_adverse_excursion: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    return_percentage: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    holding_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    exit_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    result: Mapped[Optional[str]] = mapped_column(String(32), index=True, nullable=True)
+
 

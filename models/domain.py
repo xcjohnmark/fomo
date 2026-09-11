@@ -350,3 +350,67 @@ class AlertCandidate(BaseModel):
     next_action: str
     analysis: Optional[MomentumAnalysis] = None
     plan: Optional[QuickFlipPlan] = None
+
+
+# =====================================================================
+# Phase 7 & 8 Strategy Call & Outcome Resolution Models
+# =====================================================================
+
+class CallResult(str, Enum):
+    """Deterministic terminal resolution results for strategy calls."""
+    TARGET_HIT = "TARGET_HIT"
+    INVALIDATED = "INVALIDATED"
+    TIME_EXIT = "TIME_EXIT"
+    EXPIRED = "EXPIRED"
+    NO_EXECUTION = "NO_EXECUTION"
+    DATA_ERROR = "DATA_ERROR"
+
+
+class CallOutcomeStatus(str, Enum):
+    """Lifecycle tracking status of a strategy call."""
+    OPEN = "OPEN"
+    RESOLVED = "RESOLVED"
+
+
+class StrategyCallSchema(BaseModel):
+    """Pydantic schema representing a permanent research observation call."""
+    model_config = ConfigDict(extra="ignore")
+
+    call_id: str
+    timestamp: datetime
+    token_ca: str
+    chain: str = "solana"
+    pool_address: Optional[str] = None
+    symbol: Optional[str] = None
+    strategy_version: str = "v1.0"
+    momentum_score: float
+
+    # Immutable Call Parameters
+    entry_price: float
+    entry_market_cap: Optional[float] = None
+    entry_zone_low: Optional[float] = None
+    entry_zone_high: Optional[float] = None
+    target_price: Optional[float] = None
+    target_market_cap: Optional[float] = None
+    invalidation_price: Optional[float] = None
+    invalidation_market_cap: Optional[float] = None
+    expected_holding_minutes: Optional[int] = 30
+    setup_state: str = "CONFIRMED"
+    reasons: List[str] = Field(default_factory=list)
+    risk_flags: List[str] = Field(default_factory=list)
+
+    # Dynamic Observation & Outcome Fields
+    outcome_status: CallOutcomeStatus = CallOutcomeStatus.OPEN
+    actual_peak_price: Optional[float] = None
+    actual_peak_market_cap: Optional[float] = None
+    actual_low_price: Optional[float] = None
+    actual_exit_price: Optional[float] = None
+    time_to_target: Optional[int] = None
+    time_to_invalidation: Optional[int] = None
+    max_favorable_excursion: float = 0.0
+    max_adverse_excursion: float = 0.0
+    return_percentage: float = 0.0
+    holding_time: Optional[int] = None
+    exit_reason: Optional[str] = None
+    result: Optional[CallResult] = None
+

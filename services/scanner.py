@@ -9,6 +9,7 @@ from collectors.base import BaseCollector, MarketDataProvider
 from config.settings import Settings, get_settings
 from models.domain import AlertCandidate
 from services.alert_recorder import AlertRecorder
+from services.call_outcome_monitor import CallOutcomeMonitor
 from services.outcome_tracker import OutcomeTracker
 from strategy.engine import MomentumStrategyEngine
 from telegram.client import TelegramNotifier
@@ -26,6 +27,7 @@ class MarketScannerService:
         alert_recorder: AlertRecorder,
         outcome_tracker: OutcomeTracker,
         telegram_notifier: TelegramNotifier,
+        call_monitor: Optional[CallOutcomeMonitor] = None,
         settings: Optional[Settings] = None,
     ):
         self.collector = collector
@@ -33,6 +35,7 @@ class MarketScannerService:
         self.alert_recorder = alert_recorder
         self.outcome_tracker = outcome_tracker
         self.telegram_notifier = telegram_notifier
+        self.call_monitor = call_monitor
         self.settings = settings or get_settings()
 
         # Cooldown map: token_address -> last_alert_timestamp
@@ -87,6 +90,10 @@ class MarketScannerService:
             # Persist alert record to database
             await self.alert_recorder.record_alert(candidate)
 
+            # Record permanent strategy call for research outcome monitoring (Phase 7)
+            if self.call_monitor:
+                await self.call_monitor.record_call(candidate)
+
             # Set cooldown timestamp
             self._alert_cooldowns[address] = datetime.now(timezone.utc)
             dispatched_candidates.append(candidate)
@@ -95,6 +102,12 @@ class MarketScannerService:
         tracked = await self.outcome_tracker.track_open_alerts()
         if tracked > 0:
             logger.debug("Recorded %d price observations for active setups", tracked)
+
+        # 5. Monitor open strategy calls (Phase 8)
+        if self.call_monitor:
+            monitored_calls = await self.call_monitor.monitor_open_calls()
+            if monitored_calls > 0:
+                logger.debug("Monitored and evaluated %d open strategy calls", monitored_calls)
 
         return dispatched_candidates
 
