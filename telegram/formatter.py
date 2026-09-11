@@ -235,31 +235,105 @@ def format_scan_summary(candidates: List[AlertCandidate]) -> str:
 
 
 def format_history_message(alerts: List[Dict[str, Any]]) -> str:
-    """Format /history command recent alerts list."""
+    """Format /history command recent alerts list, supporting tripartite research records."""
     if not alerts:
-        return "📜 ALERT HISTORY\n\nNo historical alerts recorded in database yet."
+        return "📜 ALERT HISTORY\n\nNo historical calls recorded in research database yet."
 
-    lines = ["📜 RECENT ALERT HISTORY\n"]
-    for a in alerts[:8]:
-        sym = a.get("symbol") or a.get("token_address", "UNKNOWN")[:8]
-        score = a.get("score", 0)
-        mc = fmt_compact_usd(a.get("market_cap"))
-        status = a.get("outcome_status", "RECORDED")
-        pnl = a.get("pnl_pct")
-        pnl_str = f" ({fmt_pct(pnl)})" if pnl is not None else ""
-        created = a.get("created_at", "")
-        if isinstance(created, datetime):
-            created_str = created.strftime("%H:%M UTC")
+    lines = ["📜 RESEARCH DATABASE — CALL HISTORY\n"]
+    for a in alerts[:6]:
+        if "what_did_we_see" in a and "what_actually_happened" in a:
+            seen = a["what_did_we_see"]
+            pred = a["what_was_predicted"]
+            out = a["what_actually_happened"]
+            call_id = a.get("call_id", "")
+            short_id = f"CALL {call_id[-6:]}: " if call_id else "CALL: "
+            sym = a.get("symbol") or "UNKNOWN"
+            res_str = out.get("result") or "PENDING"
+            ret = out.get("return_percentage")
+            ret_str = f" ({fmt_pct(ret)})" if ret is not None else ""
+
+            lines.append(
+                f"🔹 {short_id}${sym}\n"
+                f"  • Seen: Score {seen.get('score', 0):.0f} | MC {fmt_compact_usd(seen.get('entry_market_cap_usd'))} | Liq {fmt_compact_usd(seen.get('liquidity_usd'))} | 5M {fmt_pct(seen.get('change_5m_pct'))}\n"
+                f"  • Predicted: Target {fmt_pct(pred.get('target_percentage'))} ({fmt_compact_usd(pred.get('target_market_cap'))}) | Inv <{fmt_compact_usd(pred.get('invalidation_market_cap'))}\n"
+                f"  • Outcome: {res_str}{ret_str} [{out.get('outcome_status', 'RECORDED')}]\n"
+            )
         else:
-            created_str = str(created)[:16]
+            sym = a.get("symbol") or a.get("token_address", "UNKNOWN")[:8]
+            score = a.get("score", 0)
+            mc = fmt_compact_usd(a.get("market_cap"))
+            status = a.get("outcome_status", "RECORDED")
+            result = a.get("result")
+            pnl = a.get("pnl_pct") if a.get("pnl_pct") is not None else a.get("return_percentage")
+            pnl_str = f" ({fmt_pct(pnl)})" if pnl is not None else ""
+            res_str = f" | {result}" if result else ""
+            created = a.get("created_at", "")
+            if isinstance(created, datetime):
+                created_str = created.strftime("%H:%M UTC")
+            else:
+                created_str = str(created)[:16]
 
-        lines.append(f"• [{created_str}] ${sym} — Score: {score:.0f} | MC: {mc} | {status}{pnl_str}")
+            lines.append(f"• [{created_str}] ${sym} — Score: {score:.0f} | MC: {mc} | {status}{res_str}{pnl_str}")
 
-    return "\n".join(lines)
+    return "\n".join(lines).strip()
 
 
 def format_stats_message(stats: Dict[str, Any]) -> str:
-    """Format /stats command performance and research metrics."""
+    """Format /stats command performance and research metrics including empirical expectancy."""
+    # Research DB Expectancy metrics if available
+    research_metrics = stats.get("research_database")
+    if research_metrics:
+        total_calls = research_metrics.get("total_calls", 0)
+        resolved_calls = research_metrics.get("resolved_calls", 0)
+        win_rate = research_metrics.get("empirical_win_rate", 0.0)
+        expectancy = research_metrics.get("mathematical_expectancy_pct", 0.0)
+        pf = research_metrics.get("profit_factor", 0.0)
+        avg_win = research_metrics.get("avg_win_pct", 0.0)
+        avg_loss = research_metrics.get("avg_loss_pct", 0.0)
+
+        lines = [
+            "📈 RESEARCH DATABASE & EXPECTANCY",
+            "==============================",
+            f"• Total Calls Logged: {total_calls}",
+            f"• Resolved Closed Calls: {resolved_calls}",
+            f"• Empirical Win Rate: {win_rate:.1f}%",
+            f"• Mathematical Expectancy (E): {fmt_pct(expectancy)} per call",
+            f"• Profit Factor: {pf:.2f}",
+            f"• Avg Win: +{avg_win:.1f}% | Avg Loss: -{avg_loss:.1f}%",
+            "------------------------------",
+            "Score Tier Expectancy:",
+        ]
+
+        by_tier = research_metrics.get("by_score_tier", {})
+        if by_tier:
+            for tier, tdata in by_tier.items():
+                t_wr = tdata.get("win_rate", 0.0)
+                t_exp = tdata.get("expectancy_pct", 0.0)
+                t_calls = tdata.get("resolved_calls", 0)
+                lines.append(f"  • {tier}: WR {t_wr:.1f}% | E: {fmt_pct(t_exp)} ({t_calls} calls)")
+        else:
+            lines.append("  • Insufficient data for score tier segmentation.")
+
+        # Also add paper trading metrics if present
+        paper_total = stats.get("total_trades", 0)
+        if paper_total > 0:
+            p_wins = stats.get("winning_trades", 0)
+            p_losses = stats.get("losing_trades", 0)
+            p_wr = (p_wins / paper_total * 100) if paper_total > 0 else 0.0
+            lines.extend([
+                "------------------------------",
+                "Simulated Paper Trades:",
+                f"• Executed: {paper_total} | Wins: {p_wins} | Losses: {p_losses}",
+                f"• Paper Win Rate: {p_wr:.1f}% | PF: {stats.get('profit_factor', 0.0):.2f}",
+            ])
+
+        lines.extend([
+            "==============================",
+            "Note: Zero hindsight bias. Pure empirical verification.",
+        ])
+        return "\n".join(lines)
+
+    # Standard fallback if only paper trade stats are provided
     total = stats.get("total_trades", 0)
     wins = stats.get("winning_trades", 0)
     losses = stats.get("losing_trades", 0)

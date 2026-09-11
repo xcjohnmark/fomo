@@ -71,6 +71,13 @@ class CallOutcomeMonitor:
         unique_suffix = uuid.uuid4().hex[:6]
         call_id = f"call_{timestamp.strftime('%Y%m%d_%H%M%S')}_{sym}_{short_addr}_{unique_suffix}"
 
+        vol_status = "NORMAL"
+        if token.volume_5m_usd and token.volume_1h_usd:
+            if token.volume_5m_usd > (token.volume_1h_usd / 12.0) * 1.5:
+                vol_status = "ACCELERATING"
+            elif token.volume_5m_usd > (token.volume_1h_usd / 12.0):
+                vol_status = "EXPANDING"
+
         call = StrategyCall(
             call_id=call_id,
             timestamp=timestamp,
@@ -80,21 +87,30 @@ class CallOutcomeMonitor:
             symbol=sym,
             strategy_version=self.strategy_version,
             momentum_score=candidate.score_result.score,
-            # Immutable parameters
+            # Immutable parameters (What did we see?)
             entry_price=entry_price,
             entry_market_cap=entry_mc,
+            entry_liquidity=token.liquidity_usd,
+            entry_5m_change_pct=token.change_5m_pct,
+            entry_1h_change_pct=token.change_1h_pct,
+            entry_volume_5m=token.volume_5m_usd,
+            entry_volume_status=vol_status,
+            top10_concentration=token.top10_holder_pct,
+            # Predictions (What did the strategy predict?)
             entry_zone_low=entry_zone_low,
             entry_zone_high=entry_zone_high,
             target_price=target_price,
             target_market_cap=target_mc,
+            target_percentage=trade_plan.target_percentage,
             invalidation_price=invalidation_price,
             invalidation_market_cap=invalidation_mc,
             expected_holding_minutes=expected_holding_minutes,
             setup_state=candidate.confirmation_state.value,
             reasons=list(candidate.reasons),
             risk_flags=list(candidate.risks),
-            # Dynamic initial tracking values
+            # Dynamic initial tracking values (What actually happened?)
             outcome_status=CallOutcomeStatus.OPEN.value,
+            is_winning=None,
             actual_peak_price=entry_price,
             actual_peak_market_cap=entry_mc,
             actual_low_price=entry_price,
@@ -188,6 +204,7 @@ class CallOutcomeMonitor:
             call.time_to_invalidation = elapsed_seconds
             call.holding_time = elapsed_seconds
             call.return_percentage = round(current_return, 2)
+            call.is_winning = False
             call.exit_reason = (
                 f"Hit invalidation level at ${current_price:.6f} "
                 f"(Threshold: ${call.invalidation_price:.6f}, Return: {call.return_percentage:+.1f}%)"
@@ -203,6 +220,7 @@ class CallOutcomeMonitor:
             call.time_to_target = elapsed_seconds
             call.holding_time = elapsed_seconds
             call.return_percentage = round(current_return, 2)
+            call.is_winning = True
             call.exit_reason = (
                 f"Reached target level at ${current_price:.6f} "
                 f"(Target: ${call.target_price:.6f}, Return: {call.return_percentage:+.1f}%)"
@@ -216,12 +234,14 @@ class CallOutcomeMonitor:
         if elapsed_minutes >= (exp_min * 2.0):
             if current_return > 0.0:
                 call.result = CallResult.TIME_EXIT.value
+                call.is_winning = True
                 call.exit_reason = (
                     f"Holding window expired after {elapsed_minutes:.0f}m with partial gain "
                     f"({current_return:+.1f}%)"
                 )
             else:
                 call.result = CallResult.EXPIRED.value
+                call.is_winning = False
                 call.exit_reason = (
                     f"Holding window expired after {elapsed_minutes:.0f}m without resolution "
                     f"({current_return:+.1f}%)"

@@ -344,7 +344,9 @@ class StrategyCall(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     call_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True, nullable=False
+    )
     token_ca: Mapped[str] = mapped_column(String(128), index=True, nullable=False)
     chain: Mapped[str] = mapped_column(String(32), default="solana", nullable=False)
     pool_address: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
@@ -355,11 +357,19 @@ class StrategyCall(Base, TimestampMixin):
     # Immutable initial call plan parameters
     entry_price: Mapped[float] = mapped_column(Float, nullable=False)
     entry_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_liquidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_5m_change_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_1h_change_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_volume_5m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_volume_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    top10_concentration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     entry_zone_low: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     entry_zone_high: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     target_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     target_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    target_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     invalidation_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     invalidation_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -372,6 +382,7 @@ class StrategyCall(Base, TimestampMixin):
 
     # Dynamic observation and outcome resolution fields
     outcome_status: Mapped[str] = mapped_column(String(32), default="OPEN", index=True, nullable=False)
+    is_winning: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     actual_peak_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     actual_peak_market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     actual_low_price: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

@@ -77,10 +77,31 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db(engine: Optional[AsyncEngine] = None) -> None:
-    """Create all database tables defined on Base."""
+    """Create all database tables defined on Base and apply non-destructive column additions."""
     eng = engine or get_engine()
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        def _ensure_columns(sync_conn):
+            from sqlalchemy import inspect, text
+            inspector = inspect(sync_conn)
+            if "strategy_calls" in inspector.get_table_names():
+                existing_cols = {c["name"] for c in inspector.get_columns("strategy_calls")}
+                cols_to_add = [
+                    ("target_percentage", "FLOAT"),
+                    ("entry_liquidity", "FLOAT"),
+                    ("entry_5m_change_pct", "FLOAT"),
+                    ("entry_1h_change_pct", "FLOAT"),
+                    ("entry_volume_5m", "FLOAT"),
+                    ("entry_volume_status", "VARCHAR(32)"),
+                    ("top10_concentration", "FLOAT"),
+                    ("is_winning", "BOOLEAN"),
+                ]
+                for col_name, col_type in cols_to_add:
+                    if col_name not in existing_cols:
+                        sync_conn.execute(text(f"ALTER TABLE strategy_calls ADD COLUMN {col_name} {col_type}"))
+
+        await conn.run_sync(_ensure_columns)
 
 
 async def close_db() -> None:

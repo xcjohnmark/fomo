@@ -28,6 +28,7 @@ from config.settings import Settings, get_settings
 from models.db import TokenAlert
 from models.domain import AlertCandidate, ConfirmationState, QuickFlipPlan
 from services.paper_trader import PaperTraderService
+from services.research_database import ResearchDatabaseService
 from services.watchlist import WatchlistService
 from strategy.engine import MomentumStrategyEngine
 from strategy.trade_planner import QuickFlipTradePlanner
@@ -252,23 +253,28 @@ class TelegramBotService:
         return text
 
     async def history_command(self, update: Any, context: Any) -> str:
-        """Handle /history command displaying historical recorded alerts."""
+        """Handle /history command displaying historical recorded alerts and research calls."""
         alerts_data: List[Dict[str, Any]] = []
         if self.session_factory:
-            async with self.session_factory() as session:
-                stmt = select(TokenAlert).order_by(desc(TokenAlert.id)).limit(10)
-                res = await session.execute(stmt)
-                for a in res.scalars().all():
-                    alerts_data.append(
-                        {
-                            "symbol": a.symbol,
-                            "token_address": a.token_address,
-                            "score": a.momentum_score,
-                            "market_cap": a.market_cap,
-                            "outcome_status": a.confirmation_state,
-                            "created_at": a.created_at,
-                        }
-                    )
+            research_service = ResearchDatabaseService(self.session_factory)
+            tripartite_records = await research_service.get_tripartite_records(limit=10)
+            if tripartite_records:
+                alerts_data = tripartite_records
+            else:
+                async with self.session_factory() as session:
+                    stmt = select(TokenAlert).order_by(desc(TokenAlert.id)).limit(10)
+                    res = await session.execute(stmt)
+                    for a in res.scalars().all():
+                        alerts_data.append(
+                            {
+                                "symbol": a.symbol,
+                                "token_address": a.token_address,
+                                "score": a.momentum_score,
+                                "market_cap": a.market_cap,
+                                "outcome_status": a.confirmation_state,
+                                "created_at": a.created_at,
+                            }
+                        )
 
         text = format_history_message(alerts_data)
         if update and update.effective_message:
@@ -276,11 +282,17 @@ class TelegramBotService:
         return text
 
     async def stats_command(self, update: Any, context: Any) -> str:
-        """Handle /stats command showing performance metrics."""
+        """Handle /stats command showing empirical expectancy and performance metrics."""
         paper_stats = await self.paper_trader.get_performance_stats()
 
         total_alerts = 0
+        research_metrics = None
         if self.session_factory:
+            research_service = ResearchDatabaseService(self.session_factory)
+            exp_data = await research_service.compute_empirical_expectancy()
+            if exp_data.get("total_calls", 0) > 0:
+                research_metrics = exp_data
+
             async with self.session_factory() as session:
                 stmt = select(TokenAlert)
                 res = await session.execute(stmt)
@@ -295,6 +307,7 @@ class TelegramBotService:
             "avg_loss_pct": paper_stats["avg_loss_pct"],
             "profit_factor": paper_stats["profit_factor"],
             "invalidation_rate": paper_stats["invalidation_rate"],
+            "research_database": research_metrics,
         }
 
         text = format_stats_message(stats_payload)
