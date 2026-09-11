@@ -78,6 +78,20 @@ class CallOutcomeMonitor:
             elif token.volume_5m_usd > (token.volume_1h_usd / 12.0):
                 vol_status = "EXPANDING"
 
+        buyer_seller_ratio = None
+        if token.buyers is not None and token.sellers is not None and token.sellers > 0:
+            buyer_seller_ratio = round(token.buyers / token.sellers, 2)
+
+        buy_sell_ratio = None
+        if token.buys is not None and token.sells is not None and token.sells > 0:
+            buy_sell_ratio = round(token.buys / token.sells, 2)
+
+        market_cond = (
+            candidate.classification.value
+            if hasattr(candidate, "classification") and candidate.classification
+            else "CONTINUATION"
+        )
+
         call = StrategyCall(
             call_id=call_id,
             timestamp=timestamp,
@@ -96,6 +110,10 @@ class CallOutcomeMonitor:
             entry_volume_5m=token.volume_5m_usd,
             entry_volume_status=vol_status,
             top10_concentration=token.top10_holder_pct,
+            entry_token_age_seconds=token.token_age_seconds,
+            entry_buyer_seller_ratio=buyer_seller_ratio,
+            entry_buy_sell_ratio=buy_sell_ratio,
+            entry_market_condition=market_cond,
             # Predictions (What did the strategy predict?)
             entry_zone_low=entry_zone_low,
             entry_zone_high=entry_zone_high,

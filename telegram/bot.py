@@ -42,7 +42,7 @@ from telegram.formatter import (
     format_telegram_alert,
     format_watchlist_message,
 )
-from telegram.keyboards import get_alert_keyboard, get_settings_keyboard
+from telegram.keyboards import get_alert_keyboard, get_settings_keyboard, get_stats_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -281,8 +281,8 @@ class TelegramBotService:
             await update.effective_message.reply_text(text)
         return text
 
-    async def stats_command(self, update: Any, context: Any) -> str:
-        """Handle /stats command showing empirical expectancy and performance metrics."""
+    async def get_stats_payload(self) -> Dict[str, Any]:
+        """Fetch unified performance metrics and research stats."""
         paper_stats = await self.paper_trader.get_performance_stats()
 
         total_alerts = 0
@@ -298,7 +298,7 @@ class TelegramBotService:
                 res = await session.execute(stmt)
                 total_alerts = len(list(res.scalars().all()))
 
-        stats_payload = {
+        return {
             "total_alerts": total_alerts,
             "total_trades": paper_stats["total_trades"],
             "winning_trades": paper_stats["winning_trades"],
@@ -310,9 +310,27 @@ class TelegramBotService:
             "research_database": research_metrics,
         }
 
-        text = format_stats_message(stats_payload)
+    async def stats_command(self, update: Any, context: Any) -> str:
+        """Handle /stats command showing empirical expectancy and performance metrics across views."""
+        args = context.args if context and hasattr(context, "args") else []
+        view = "overview"
+        if args:
+            arg = args[0].lower().strip()
+            if arg in ("mc", "liq", "mc_liq"):
+                view = "mc_liq"
+            elif arg in ("mom", "momentum", "flow", "vol", "volume"):
+                view = "momentum_flow"
+            elif arg in ("timing", "tod", "dow", "structure"):
+                view = "timing_structure"
+            elif arg in ("score", "scores", "regime", "regimes", "cond"):
+                view = "scores_regimes"
+
+        stats_payload = await self.get_stats_payload()
+        text = format_stats_message(stats_payload, view=view)
+        markup = get_stats_keyboard(current_view=view)
+
         if update and update.effective_message:
-            await update.effective_message.reply_text(text)
+            await update.effective_message.reply_text(text, reply_markup=markup)
         return text
 
     async def paper_command(self, update: Any, context: Any) -> str:
@@ -459,6 +477,18 @@ class TelegramBotService:
             except Exception:
                 pass
             return "settings_updated"
+
+        elif action == "stats":
+            view = param if param in ("overview", "mc_liq", "momentum_flow", "timing_structure", "scores_regimes") else "overview"
+            stats_payload = await self.get_stats_payload()
+            text = format_stats_message(stats_payload, view=view)
+            markup = get_stats_keyboard(current_view=view)
+            try:
+                await query.edit_message_text(text=text, reply_markup=markup)
+            except Exception:
+                pass
+            await query.answer()
+            return f"stats_{view}"
 
         await query.answer()
         return "ok"

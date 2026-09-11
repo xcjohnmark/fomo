@@ -96,6 +96,10 @@ async def init_db(engine: Optional[AsyncEngine] = None) -> None:
                     ("entry_volume_status", "VARCHAR(32)"),
                     ("top10_concentration", "FLOAT"),
                     ("is_winning", "BOOLEAN"),
+                    ("entry_token_age_seconds", "INTEGER"),
+                    ("entry_buyer_seller_ratio", "FLOAT"),
+                    ("entry_buy_sell_ratio", "FLOAT"),
+                    ("entry_market_condition", "VARCHAR(64)"),
                 ]
                 for col_name, col_type in cols_to_add:
                     if col_name not in existing_cols:

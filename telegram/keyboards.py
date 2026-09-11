@@ -44,3 +44,37 @@ def get_settings_keyboard(settings_data: Dict[str, Any]) -> InlineKeyboardMarkup
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+def get_stats_keyboard(current_view: str = "overview") -> InlineKeyboardMarkup:
+    """Construct inline navigation buttons for /stats breakdowns."""
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "📊 Overview" + (" (active)" if current_view == "overview" else ""),
+                callback_data="stats:overview",
+            ),
+            InlineKeyboardButton(
+                "💰 MC & Liquidity" + (" (active)" if current_view == "mc_liq" else ""),
+                callback_data="stats:mc_liq",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "⚡ Momentum & Flow" + (" (active)" if current_view == "momentum_flow" else ""),
+                callback_data="stats:momentum_flow",
+            ),
+            InlineKeyboardButton(
+                "⏰ Timing & Structure" + (" (active)" if current_view == "timing_structure" else ""),
+                callback_data="stats:timing_structure",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "🎯 Scores & Regimes" + (" (active)" if current_view == "scores_regimes" else ""),
+                callback_data="stats:scores_regimes",
+            ),
+            InlineKeyboardButton("🔄 Refresh", callback_data="stats:refresh"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)

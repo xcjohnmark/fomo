@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.db import StrategyCall
 from models.domain import CallOutcomeStatus, CallResult
+from services.statistical_engine import StatisticalEngine
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,10 @@ class ResearchDatabaseService:
                 "volume_5m_usd": call.entry_volume_5m,
                 "volume_status": call.entry_volume_status or "ACCELERATING",
                 "top10_concentration_pct": call.top10_concentration,
+                "token_age_seconds": call.entry_token_age_seconds,
+                "buyer_seller_ratio": call.entry_buyer_seller_ratio,
+                "buy_sell_ratio": call.entry_buy_sell_ratio,
+                "market_condition": call.entry_market_condition,
                 "reasons": call.reasons,
                 "risk_flags": call.risk_flags,
             }
@@ -159,6 +164,10 @@ class ResearchDatabaseService:
                     "volume_5m_usd": saw["volume_5m_usd"],
                     "volume_status": saw["volume_status"],
                     "top10_concentration_pct": saw["top10_concentration_pct"],
+                    "token_age_seconds": saw.get("token_age_seconds"),
+                    "buyer_seller_ratio": saw.get("buyer_seller_ratio"),
+                    "buy_sell_ratio": saw.get("buy_sell_ratio"),
+                    "market_condition": saw.get("market_condition"),
                     # What was predicted?
                     "target_price": pred["target_price"],
                     "target_mc": pred["target_market_cap"],
@@ -230,95 +239,55 @@ class ResearchDatabaseService:
         return df
 
     async def compute_empirical_expectancy(self) -> Dict[str, Any]:
-        """Calculate mathematically rigorous expectancy and performance segmented by score tiers and MC."""
+        """Calculate mathematically rigorous expectancy and performance segmented across all dimensions."""
         calls = await self.get_all_calls(limit=10000)
-        total = len(calls)
-        resolved = [c for c in calls if c.outcome_status == CallOutcomeStatus.RESOLVED.value]
-
-        if not resolved:
-            return {
-                "total_calls": total,
-                "resolved_calls": 0,
-                "win_rate": 0.0,
-                "overall_expectancy": 0.0,
-                "profit_factor": 0.0,
-                "by_score_bracket": {},
-                "by_market_cap_bracket": {},
-            }
-
-        def _calc_bracket_stats(cohort: List[StrategyCall]) -> Dict[str, Any]:
-            n = len(cohort)
-            if n == 0:
-                return {"calls": 0, "win_rate": 0.0, "expectancy": 0.0, "avg_mfe": 0.0}
-
-            winners = [c for c in cohort if (c.return_percentage or 0.0) > 0.0]
-            losers = [c for c in cohort if (c.return_percentage or 0.0) <= 0.0]
-
-            p_win = len(winners) / n
-            p_loss = len(losers) / n
-
-            avg_win = sum(w.return_percentage for w in winners) / len(winners) if winners else 0.0
-            avg_loss = abs(sum(l.return_percentage for l in losers) / len(losers)) if losers else 0.0
-
-            expectancy = (p_win * avg_win) - (p_loss * avg_loss)
-            avg_mfe = sum(c.max_favorable_excursion for c in cohort) / n
-
-            return {
-                "calls": n,
-                "resolved_calls": n,
-                "win_rate": round(p_win * 100.0, 1),
-                "expectancy": round(expectancy, 2),
-                "expectancy_pct": round(expectancy, 2),
-                "avg_mfe": round(avg_mfe, 2),
-                "avg_win_pct": round(avg_win, 2),
-                "avg_loss_pct": round(avg_loss, 2),
-            }
-
-        overall_stats = _calc_bracket_stats(resolved)
-
-        sum_gains = sum(c.return_percentage for c in resolved if (c.return_percentage or 0.0) > 0)
-        sum_losses = abs(sum(c.return_percentage for c in resolved if (c.return_percentage or 0.0) <= 0))
-        pf = (sum_gains / sum_losses) if sum_losses > 0 else (99.0 if sum_gains > 0 else 0.0)
-
-        # Segment by score bracket
-        score_90_plus = [c for c in resolved if c.momentum_score >= 90.0]
-        score_85_89 = [c for c in resolved if 85.0 <= c.momentum_score < 90.0]
-        score_under_85 = [c for c in resolved if c.momentum_score < 85.0]
-
-        score_90_stats = _calc_bracket_stats(score_90_plus)
-        score_85_stats = _calc_bracket_stats(score_85_89)
-        score_under_stats = _calc_bracket_stats(score_under_85)
-
-        # Segment by MC bracket
-        mc_sub_150k = [c for c in resolved if (c.entry_market_cap or 0.0) < 150_000.0]
-        mc_150_500k = [c for c in resolved if 150_000.0 <= (c.entry_market_cap or 0.0) < 500_000.0]
-        mc_over_500k = [c for c in resolved if (c.entry_market_cap or 0.0) >= 500_000.0]
+        full_metrics = StatisticalEngine.compute_all_metrics(calls)
+        core = full_metrics["core"]
+        breakdowns = full_metrics["breakdowns"]
 
         return {
-            "total_calls": total,
-            "resolved_calls": len(resolved),
-            "winning_calls": len([c for c in resolved if (c.return_percentage or 0.0) > 0]),
-            "losing_calls": len([c for c in resolved if (c.return_percentage or 0.0) <= 0]),
-            "win_rate": overall_stats["win_rate"],
-            "empirical_win_rate": overall_stats["win_rate"],
-            "overall_expectancy": overall_stats["expectancy"],
-            "mathematical_expectancy_pct": overall_stats["expectancy"],
-            "profit_factor": round(pf, 2),
-            "avg_win_pct": overall_stats["avg_win_pct"],
-            "avg_loss_pct": overall_stats["avg_loss_pct"],
+            "total_calls": core["total_calls_logged"],
+            "resolved_calls": core["resolved_calls"],
+            "winning_calls": round(core["resolved_calls"] * (core["win_rate"] / 100.0)),
+            "losing_calls": round(core["resolved_calls"] * (core["loss_rate"] / 100.0)),
+            "win_rate": core["win_rate"],
+            "empirical_win_rate": core["win_rate"],
+            "loss_rate": core["loss_rate"],
+            "avg_win": core["avg_win"],
+            "avg_win_pct": core["avg_win"],
+            "avg_loss": core["avg_loss"],
+            "avg_loss_pct": core["avg_loss"],
+            "median_win": core["median_win"],
+            "median_loss": core["median_loss"],
+            "overall_expectancy": core["expectancy"],
+            "mathematical_expectancy_pct": core["expectancy"],
+            "profit_factor": core["profit_factor"],
+            "avg_holding_time_min": core["avg_holding_time_min"],
+            "median_holding_time_min": core["median_holding_time_min"],
+            "target_hit_rate": core["target_hit_rate"],
+            "invalidation_rate": core["invalidation_rate"],
+            "timeout_rate": core["timeout_rate"],
+            "avg_mfe": core["avg_mfe"],
+            "max_mfe": core["max_mfe"],
+            "avg_mae": core["avg_mae"],
+            "max_mae": core["max_mae"],
+            "max_drawdown": core["max_drawdown"],
+            "core": core,
+            "breakdowns": breakdowns,
+            # Backward-compatible brackets
             "by_score_bracket": {
-                "Score 90–100": score_90_stats,
-                "Score 85–89": score_85_stats,
-                "Score <85": score_under_stats,
+                "Score 90-100": breakdowns["strategy_score"].get("Score 90-100 (Strong)", {}),
+                "Score 85-89": breakdowns["strategy_score"].get("Score 85-89 (Watch)", {}),
+                "Score <85": breakdowns["strategy_score"].get("Score 70-84 (Conditional)", {}),
             },
             "by_score_tier": {
-                "90-100 (Strong)": score_90_stats,
-                "85-89 (Watch)": score_85_stats,
-                "<85 (Conditional/Weak)": score_under_stats,
+                "90-100 (Strong)": breakdowns["strategy_score"].get("Score 90-100 (Strong)", {}),
+                "85-89 (Watch)": breakdowns["strategy_score"].get("Score 85-89 (Watch)", {}),
+                "<85 (Conditional/Weak)": breakdowns["strategy_score"].get("Score 70-84 (Conditional)", {}),
             },
             "by_market_cap_bracket": {
-                "Sub-$150K MC": _calc_bracket_stats(mc_sub_150k),
-                "$150K–$500K MC": _calc_bracket_stats(mc_150_500k),
-                "$500K+ MC": _calc_bracket_stats(mc_over_500k),
+                "Sub-$150K MC": breakdowns["market_cap"].get("Micro (<$100K)", {}),
+                "$150K-$500K MC": breakdowns["market_cap"].get("Mid ($250K-$500K)", {}),
+                "$500K+ MC": breakdowns["market_cap"].get("High ($500K+)", {}),
             },
         }

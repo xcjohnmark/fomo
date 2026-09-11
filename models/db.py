@@ -363,6 +363,10 @@ class StrategyCall(Base, TimestampMixin):
     entry_volume_5m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     entry_volume_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     top10_concentration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_token_age_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    entry_buyer_seller_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_buy_sell_ratio: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    entry_market_condition: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     entry_zone_low: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     entry_zone_high: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
